@@ -1,0 +1,10 @@
+{
+  "description": "Explore a dynamic 3D interactive studio where autonomous AI agents showcase creative workflows, embodying a technologist's innovative projects and vision.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}
