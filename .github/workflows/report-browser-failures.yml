@@ -35,7 +35,7 @@ jobs:
             const fs = require("fs")
             // A comment body is capped at 65536 characters, and the tail of a
             // Playwright log is where the failing assertion is reported.
-            const limit = 60000
+            const limit = 48000
             let log = fs.existsSync("failed.log")
               ? fs.readFileSync("failed.log", "utf8")
               : "no log collected"
