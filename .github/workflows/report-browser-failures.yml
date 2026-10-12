@@ -11,6 +11,7 @@ on:
 permissions:
   actions: read
   contents: write
+  issues: write
 
 jobs:
   report:
@@ -40,19 +41,26 @@ jobs:
               ? fs.readFileSync("failed.log", "utf8")
               : "no log collected"
             if (log.length > limit) log = "...(trimmed)\n" + log.slice(-limit)
-            await github.rest.repos.createCommitComment({
+            const body = [
+              "Browser tests failed on this commit.",
+              "",
+              "```",
+              log,
+              "```",
+            ].join("\n")
+            const target = {
               owner: context.repo.owner,
               repo: context.repo.repo,
               commit_sha: context.event.workflow_run.head_sha,
-              body: [
-                "Browser tests failed on this commit.",
-                "",
-                "<details><summary>failing output</summary>",
-                "",
-                "```",
-                log,
-                "```",
-                "",
-                "</details>",
-              ].join("\n"),
-            })
+              body,
+            }
+            try {
+              await github.rest.repos.createCommitComment(target)
+            } catch (error) {
+              core.error(`commit comment failed: ${error}`)
+              // a shorter body often clears a size or encoding rejection
+              await github.rest.repos.createCommitComment({
+                ...target,
+                body: body.slice(-20000),
+              })
+            }
