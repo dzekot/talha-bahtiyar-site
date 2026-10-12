@@ -15,6 +15,29 @@ async function ready(page: Page) {
 async function diagnostic(page: Page, name: string) {
   return world(page).getAttribute(`data-${name}`)
 }
+// Waits until the published camera stops changing. Works in every view mode,
+// unlike the in-orbit `settled` flag, so a scripted glide can be awaited
+// before its pose is measured.
+async function stableCamera(page: Page) {
+  let previous = ""
+  let stable = 0
+  for (let attempt = 0; attempt < 120; attempt++) {
+    await page.waitForTimeout(250)
+    const next = await diagnostic(page, "camera")
+    stable = next === previous ? stable + 1 : 0
+    previous = next
+    if (stable >= 3) return next
+  }
+  return previous
+}
+// A slow renderer can publish the same frame twice, so a camera that is about
+// to move has to be waited on before its pose can be measured.
+async function movedFrom(page: Page, before: string | null) {
+  await expect
+    .poll(() => diagnostic(page, "camera"), { timeout: 30_000 })
+    .not.toBe(before)
+  return stableCamera(page)
+}
 
 test("production scene loads without errors or remote runtime dependencies", async ({
   page,
@@ -77,7 +100,9 @@ test("projects fly into their live rooms; About dialog preserves the renderer an
     await expect(page.getByRole("dialog")).toBeHidden()
     await expect(page.getByRole("status")).toContainText(`Viewing ${name}`)
     await expect(trigger).toHaveClass(/active/)
-    await expect.poll(() => diagnostic(page, "camera")).not.toBe(cameraBefore)
+    await expect
+      .poll(() => diagnostic(page, "camera"), { timeout: 30_000 })
+      .not.toBe(cameraBefore)
     await expect(
       page.locator('canvas[data-original-canvas="yes"]'),
     ).toHaveCount(1)
@@ -103,7 +128,7 @@ test("projects fly into their live rooms; About dialog preserves the renderer an
 test("mouse-look works without clicking and free flight responds to keyboard controls", async ({
   page,
 }) => {
-  test.setTimeout(120_000)
+  test.setTimeout(240_000)
   await ready(page)
   const reset = page.getByRole("button", { name: "Reset camera", exact: true })
   // waits until the scripted move has landed, whatever the device frame rate is
@@ -129,15 +154,22 @@ test("mouse-look works without clicking and free flight responds to keyboard con
   await page.mouse.move(x, y)
   const pointerEntered = await diagnostic(page, "camera")
   await page.mouse.move(x + 55, y + 24, { steps: 8 })
-  await expect.poll(() => diagnostic(page, "camera")).not.toBe(pointerEntered)
+  await expect
+    .poll(() => diagnostic(page, "camera"), { timeout: 30_000 })
+    .not.toBe(pointerEntered)
   const beforeFlight = await diagnostic(page, "camera")
-  // Keep the key down across multiple rendered frames. `press` can dispatch
-  // keydown and keyup between two frames on a fast runner, so it may never
-  // produce a movement tick.
+  // Hold the key until the camera diagnostic actually reports movement. A
+  // fixed sleep is not enough on a software rasteriser, where a single frame
+  // can take longer than the sleep — and the diagnostic is only written once
+  // a frame has been drawn.
   await page.keyboard.down("w")
-  await page.waitForTimeout(650)
-  await page.keyboard.up("w")
-  expect(await diagnostic(page, "camera")).not.toBe(beforeFlight)
+  try {
+    await expect
+      .poll(() => diagnostic(page, "camera"), { timeout: 30_000 })
+      .not.toBe(beforeFlight)
+  } finally {
+    await page.keyboard.up("w")
+  }
   await page.keyboard.press("Escape")
   const overview = await settle()
   expect(overview).toBe(initial)
@@ -146,9 +178,16 @@ test("mouse-look works without clicking and free flight responds to keyboard con
   await page.mouse.down()
   await page.mouse.move(x + 110, y + 25, { steps: 15 })
   await page.mouse.up()
-  await expect.poll(() => diagnostic(page, "camera")).not.toBe(initial)
+  await expect
+    .poll(() => diagnostic(page, "camera"), { timeout: 30_000 })
+    .not.toBe(initial)
+  // let the orbit damping come to rest so the wheel is the only thing that can
+  // move the camera next
+  const dragged = await settle()
   await page.mouse.wheel(0, -350)
-  await page.waitForTimeout(700)
+  await expect
+    .poll(() => diagnostic(page, "camera"), { timeout: 30_000 })
+    .not.toBe(dragged)
   const moved = await diagnostic(page, "camera")
   await reset.click()
   const restored = await settle()
@@ -156,8 +195,9 @@ test("mouse-look works without clicking and free flight responds to keyboard con
   // A reset must return to the same saved studio pose after another independent orbit.
   await page.locator("canvas").focus()
   await page.keyboard.press("ArrowRight")
-  await page.waitForTimeout(700)
-  expect(await diagnostic(page, "camera")).not.toBe(restored)
+  await expect
+    .poll(() => diagnostic(page, "camera"), { timeout: 30_000 })
+    .not.toBe(restored)
   await reset.click()
   expect(await settle()).toBe(restored)
 })
@@ -294,23 +334,33 @@ test("explore mode drops to eye level, walks the floor and returns to orbit", as
   await page.getByRole("button", { name: "Explore the studio" }).click()
   await expect(walk).toBeVisible()
   await expect(walk.getByText("Walking the floor")).toBeVisible()
-  await expect
-    .poll(() => diagnostic(page, "camera"), { timeout: 8000 })
-    .not.toBe(overview)
-  const eye = JSON.parse((await diagnostic(page, "camera"))!).position
+  // dropping to the floor is a scripted glide: wait for it to land before the
+  // altitude is measured
+  const eye = JSON.parse((await movedFrom(page, overview))!).position
   // The studio sits above the skyline; walking keeps the altitude of its
   // elevated floor rather than dropping the camera to world-space y=0.
   expect(eye[1]).toBeGreaterThan(91.3)
   expect(eye[1]).toBeLessThan(92)
   const before = (await diagnostic(page, "camera"))!
+  // hold the key until the floor has actually been walked, same reasoning as
+  // the free-flight check above. One slow frame is worth at most 0.21 units,
+  // so the threshold has to be observed, not assumed.
   await page.keyboard.down("w")
-  await page.waitForTimeout(1500)
-  await page.keyboard.up("w")
-  await expect
-    .poll(() => diagnostic(page, "camera"), { timeout: 8000 })
-    .not.toBe(before)
-  const moved = JSON.parse((await diagnostic(page, "camera"))!).position
-  expect(Math.hypot(moved[0] - eye[0], moved[2] - eye[2])).toBeGreaterThan(0.3)
+  try {
+    await expect
+      .poll(
+        async () => {
+          const shot = await diagnostic(page, "camera")
+          if (!shot) return 0
+          const point = JSON.parse(shot).position
+          return Math.hypot(point[0] - eye[0], point[2] - eye[2])
+        },
+        { timeout: 30_000 },
+      )
+      .toBeGreaterThan(0.3)
+  } finally {
+    await page.keyboard.up("w")
+  }
   await walk.getByRole("button", { name: "Back to overview" }).click()
   await expect(walk).toHaveCount(0)
   await expect

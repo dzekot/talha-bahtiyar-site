@@ -6,7 +6,10 @@ export default defineConfig({
   expect: { timeout: 15_000 },
   fullyParallel: false,
   workers: 1,
-  retries: 0,
+  // The scene runs on a software rasteriser in CI, where frame times are long
+  // and occasionally push a timing assertion over the edge. One retry keeps a
+  // slow runner from failing the deploy while a genuine break still fails twice.
+  retries: process.env.CI ? 1 : 0,
   reporter: [["list"], ["json", { outputFile: "test-results/results.json" }]],
   use: {
     baseURL: "http://127.0.0.1:4174",
