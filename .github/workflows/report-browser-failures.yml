@@ -1,0 +1,69 @@
+name: Report browser test failures
+
+# The Browser tests workflow runs on pull requests, so it keeps a read-only
+# token. This workflow reacts to its *result* instead, from the default
+# branch, which is where write access is safe to hand out.
+on:
+  workflow_run:
+    workflows: ["Browser tests"]
+    types: [completed]
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  report:
+    if: github.event.workflow_run.conclusion == 'failure'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download the failure report
+        uses: actions/download-artifact@v4
+        with:
+          run-id: ${{ github.event.workflow_run.id }}
+          pattern: browser-test-failure-*
+          merge-multiple: true
+
+      - name: Comment the failed tests on the commit
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require("fs")
+            const file = "test-results/results.json"
+            if (!fs.existsSync(file)) {
+              core.warning("no results.json to summarise")
+              return
+            }
+            const report = JSON.parse(fs.readFileSync(file, "utf8"))
+            const failed = []
+            const walk = (suite) => {
+              for (const spec of suite.specs || []) {
+                for (const entry of spec.tests || []) {
+                  const result = entry.results[entry.results.length - 1]
+                  if (entry.status === "unexpected" || result.status !== "passed") {
+                    const detail = (result.error?.message || "")
+                      .split("\n")
+                      .slice(0, 12)
+                      .join("\n")
+                    failed.push(
+                      `**${spec.title}** — \`${entry.projectName}\`\n\n${detail}`
+                    )
+                  }
+                }
+              }
+              for (const child of suite.suites || []) walk(child)
+            }
+            for (const suite of report.suites || []) walk(suite)
+            if (!failed.length) return
+            await github.rest.repos.createCommitComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              commit_sha: context.event.workflow_run.head_sha,
+              body: [
+                "Browser tests failed on this commit.",
+                "",
+                ...failed,
+                "",
+                `<https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.event.workflow_run.id}>full log</https>`,
+              ].join("\n"),
+            })
