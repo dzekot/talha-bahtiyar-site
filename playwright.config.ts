@@ -10,7 +10,12 @@ export default defineConfig({
   // and occasionally push a timing assertion over the edge. One retry keeps a
   // slow runner from failing the deploy while a genuine break still fails twice.
   retries: process.env.CI ? 1 : 0,
-  reporter: [["list"], ["json", { outputFile: "test-results/results.json" }]],
+  reporter: [
+    ["list"],
+    ["json", { outputFile: "test-results/results.json" }],
+    // the html report is what gets attached to a failing CI run
+    ["html", { outputFolder: "playwright-report", open: "never" }],
+  ],
   use: {
     baseURL: "http://127.0.0.1:4174",
     trace: "retain-on-failure",

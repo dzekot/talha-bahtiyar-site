@@ -1,5 +1,9 @@
 name: Build and deploy to GitHub Pages
 
+# The deploy only needs the site to typecheck and build. The browser suite
+# runs on a software rasteriser and takes ~20 minutes on a hosted runner, so
+# it lives in its own workflow: a scene that a slow runner cannot finish in
+# time must not keep the site offline.
 on:
   push:
     branches: [main, master]
@@ -40,14 +44,6 @@ jobs:
         run: pnpm build
         env:
           DEPLOY_BASE: /
-
-      - name: Install browser test dependencies
-        run: pnpm exec playwright install --with-deps chromium webkit
-        env:
-          PLAYWRIGHT_BROWSERS_PATH: .browser-cache
-
-      - name: Run browser tests
-        run: pnpm test
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v4
