@@ -36,6 +36,11 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
+      - name: Build for GitHub Pages
+        run: pnpm build
+        env:
+          DEPLOY_BASE: /
+
       - name: Install browser test dependencies
         run: pnpm exec playwright install --with-deps chromium webkit
         env:
@@ -43,11 +48,6 @@ jobs:
 
       - name: Run browser tests
         run: pnpm test
-
-      - name: Build for GitHub Pages
-        run: pnpm build
-        env:
-          DEPLOY_BASE: /
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v4
