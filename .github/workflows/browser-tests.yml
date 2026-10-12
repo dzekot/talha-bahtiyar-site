@@ -18,8 +18,22 @@ concurrency:
 
 jobs:
   browser:
+    # One job per browser so a broken engine is obvious from the run page,
+    # instead of hiding behind whichever engine ran first.
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, webkit]
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    env:
+      PLAYWRIGHT_BROWSERS_PATH: .browser-cache
+      # WebKitGTK composites through dma-buf and GL on a runner that has
+      # neither, which kills the web process mid-scene. Force the software
+      # path it uses on a desktop.
+      WEBKIT_DISABLE_DMABUF_RENDERER: "1"
+      WEBKIT_DISABLE_COMPOSITING_MODE: "1"
+      LIBGL_ALWAYS_SOFTWARE: "1"
     steps:
       - name: Check out source
         uses: actions/checkout@v6
@@ -46,19 +60,17 @@ jobs:
         env:
           DEPLOY_BASE: /
 
-      - name: Install browser test dependencies
-        run: pnpm exec playwright install --with-deps chromium webkit
-        env:
-          PLAYWRIGHT_BROWSERS_PATH: .browser-cache
+      - name: Install ${{ matrix.browser }}
+        run: pnpm exec playwright install --with-deps ${{ matrix.browser }}
 
-      - name: Run browser tests
-        run: pnpm test
+      - name: Run ${{ matrix.browser }} tests
+        run: pnpm test --project=${{ matrix.browser }}
 
-      - name: Upload test report and traces
+      - name: Upload report and traces
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: browser-test-failure
+          name: browser-test-failure-${{ matrix.browser }}
           path: |
             test-results/
             playwright-report/
