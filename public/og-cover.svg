@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" fill="none">
+  <defs>
+    <linearGradient id="bg" x1="92" y1="38" x2="1120" y2="630" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#111C36"/><stop offset=".53" stop-color="#080D19"/><stop offset="1" stop-color="#190F2B"/>
+    </linearGradient>
+    <linearGradient id="glow" x1="800" y1="118" x2="1092" y2="546" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#38E8FF" stop-opacity=".9"/><stop offset="1" stop-color="#A98BFF" stop-opacity=".08"/>
+    </linearGradient>
+    <filter id="blur" x="680" y="90" width="520" height="520" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse">
+      <feGaussianBlur stdDeviation="56"/>
+    </filter>
+  </defs>
+  <path fill="url(#bg)" d="M0 0h1200v630H0z"/>
+  <path fill="#38E8FF" fill-opacity=".16" filter="url(#blur)" d="M962 202h274v295H962z"/>
+  <path stroke="#38E8FF" stroke-opacity=".22" d="M0 544h1200M0 572h1200"/>
+  <path stroke="#38E8FF" stroke-opacity=".16" d="M820 0v630M850 0v630M880 0v630M910 0v630M940 0v630M970 0v630M1000 0v630M1030 0v630M1060 0v630M1090 0v630"/>
+  <path stroke="url(#glow)" stroke-width="2" d="M744 431 901 278l136 76 117-168M744 431h410"/>
+  <circle cx="901" cy="278" r="9" fill="#38E8FF"/><circle cx="1037" cy="354" r="8" fill="#FF5FA8"/><circle cx="1154" cy="186" r="8" fill="#A98BFF"/>
+  <path stroke="#38E8FF" stroke-width="2" d="M66 74h34M66 74v34M1134 556h-34m34 0v-34"/>
+  <text x="84" y="125" fill="#7D91A8" font-family="Arial,sans-serif" font-size="16" letter-spacing="5">TALHA BAHTIYAR · DIGITAL STUDIO</text>
+  <text x="78" y="300" fill="#F4F5F2" font-family="Arial,sans-serif" font-size="64" font-weight="700" letter-spacing="-2">Ideas become</text>
+  <text x="78" y="378" fill="#F4F5F2" font-family="Arial,sans-serif" font-size="64" font-weight="700" letter-spacing="-2">systems<tspan fill="#38E8FF">.</tspan></text>
+  <text x="84" y="436" fill="#A6B3C4" font-family="Arial,sans-serif" font-size="20" letter-spacing="1">AGENTIC SYSTEMS · DIGITAL PRODUCTS · INTERACTIVE WORLDS</text>
+  <text x="84" y="590" fill="#38E8FF" font-family="Arial,sans-serif" font-size="14" letter-spacing="3">TALHABAHTIYAR.COM</text>
+</svg>

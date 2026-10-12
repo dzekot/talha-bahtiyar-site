@@ -19,3 +19,11 @@ logs/
 # beside it.
 /.plugins/
 /.opencode-skills/
+
+# Local dependency cache and browser evidence
+.pnpm-store/
+test-results/
+playwright-report/
+release/
+
+.browser-cache/
