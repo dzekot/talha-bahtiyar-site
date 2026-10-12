@@ -17,44 +17,29 @@ jobs:
     if: github.event.workflow_run.conclusion == 'failure'
     runs-on: ubuntu-latest
     steps:
-      - name: Download the failure report
-        uses: actions/download-artifact@v4
-        with:
-          run-id: ${{ github.event.workflow_run.id }}
-          pattern: browser-test-failure-*
-          merge-multiple: true
+      - name: Collect the failing output
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+        run: |
+          set -o pipefail
+          gh run view "$RUN_ID" --log-failed > failed.log 2>/dev/null \
+            || gh run view "$RUN_ID" --log > failed.log 2>&1 \
+            || echo "could not read the log" > failed.log
+          wc -l failed.log
 
-      - name: Comment the failed tests on the commit
+      - name: Comment the failure on the commit
         uses: actions/github-script@v7
         with:
           script: |
             const fs = require("fs")
-            const file = "test-results/results.json"
-            if (!fs.existsSync(file)) {
-              core.warning("no results.json to summarise")
-              return
-            }
-            const report = JSON.parse(fs.readFileSync(file, "utf8"))
-            const failed = []
-            const walk = (suite) => {
-              for (const spec of suite.specs || []) {
-                for (const entry of spec.tests || []) {
-                  const result = entry.results[entry.results.length - 1]
-                  if (entry.status === "unexpected" || result.status !== "passed") {
-                    const detail = (result.error?.message || "")
-                      .split("\n")
-                      .slice(0, 12)
-                      .join("\n")
-                    failed.push(
-                      `**${spec.title}** — \`${entry.projectName}\`\n\n${detail}`
-                    )
-                  }
-                }
-              }
-              for (const child of suite.suites || []) walk(child)
-            }
-            for (const suite of report.suites || []) walk(suite)
-            if (!failed.length) return
+            // A comment body is capped at 65536 characters, and the tail of a
+            // Playwright log is where the failing assertion is reported.
+            const limit = 60000
+            let log = fs.existsSync("failed.log")
+              ? fs.readFileSync("failed.log", "utf8")
+              : "no log collected"
+            if (log.length > limit) log = "...(trimmed)\n" + log.slice(-limit)
             await github.rest.repos.createCommitComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -62,8 +47,12 @@ jobs:
               body: [
                 "Browser tests failed on this commit.",
                 "",
-                ...failed,
+                "<details><summary>failing output</summary>",
                 "",
-                `<https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.event.workflow_run.id}>full log</https>`,
+                "```",
+                log,
+                "```",
+                "",
+                "</details>",
               ].join("\n"),
             })
